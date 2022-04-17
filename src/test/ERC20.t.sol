@@ -1,66 +1,80 @@
 pragma solidity ^0.8.0;
 
 import "ds-test/test.sol";
+import "../ERC20.sol";
 
-contract ERC20 is DSTest {
-  function accountOffset(address account) internal view returns (uint offset) {
-    assembly {
-      offset := add(0x1000, account)
-    }
+interface CheatCodes {
+  function prank(address) external;
+  function startPrank(address) external;
+  function stopPrank() external;
+}
+
+
+contract ERC20Test is DSTest {
+
+  /*----------------------------------------------------
+    Tests 
+  ----------------------------------------------------*/
+  CheatCodes constant cheats = CheatCodes(HEVM_ADDRESS);
+
+  address public constant ALICE = address(420);
+  address public constant BOB = address(69);
+
+  uint public constant initialBalance = 1000000 ether;
+  
+  ERC20 public token;
+
+  function setUp() external {
+    token = new ERC20();
+    token.mint(ALICE, initialBalance);
+    token.mint(BOB, initialBalance);
   }
 
-  function balanceOf(address account) public view returns (uint bal) {
-    uint offset = accountOffset(account);
-    assembly {
-      bal := sload(offset)
-    }
+  function testBalanceOf() external {
+    assertEq(token.balanceOf(ALICE), initialBalance); 
+    assertEq(token.balanceOf(BOB), initialBalance); 
   }
 
-  function totalSupply() public view returns (uint supply) {
-    assembly {
-      supply := sload(0x01)
-    }
+  function testTotalSupply() external {
+    assertEq(token.totalSupply(), initialBalance * 2);
   }
 
-  function transfer(address to, address from, uint amount) public {
-    uint toOffset = accountOffset(to);
-    uint fromOffset = accountOffset(from);
-
-    assembly {
-      let fromBal := sload(fromOffset)
-      if iszero(iszero(lt(fromBal, amount))) { revert(0, 0) }
-      sstore(toOffset, add(sload(toOffset), amount))
-      sstore(fromOffset, sub(fromBal, amount))
-    }
+  function testTransfer() external {
+    uint amount = 1 ether;
+    cheats.prank(ALICE);
+    token.transfer(ALICE, BOB, amount);
+    assertEq(token.balanceOf(ALICE), initialBalance - amount);
+    assertEq(token.balanceOf(BOB), initialBalance + amount);
+  }
+  
+  function testFailTransfer() external {
+    uint amount = 1 ether;
+    token.transfer(ALICE, BOB, amount);
   }
 
-  function mint(address to, uint amount) public {
-    uint offset = accountOffset(to);
-    assembly {
-      sstore(offset, add(sload(offset), amount))
-    }
+  function testTransferFrom() external {
+    uint amount = 1 ether;
+    cheats.prank(ALICE);
+    token.approve(ALICE, BOB, amount);
+    token.transferFrom(ALICE, BOB, amount);
+    assertEq(token.balanceOf(ALICE), initialBalance - amount);
+    assertEq(token.balanceOf(BOB), initialBalance + amount);
   }
 
-  function testToken() public {
-    emit log("first");
-    uint bef = balanceOf(address(1));
-    emit log_uint(bef);
-    assert(bef == 0);
-    mint(address(1), 100);
-    uint aft = balanceOf(address(1));
-    assert(aft == 100);
-    emit log_uint(aft);
+  function testFailApproval() external {
+    uint amount = 1 ether;
+    token.approve(ALICE, BOB, amount);
+  }
 
-    {
-      emit log("second");
-      uint bef = balanceOf(address(2));
-      emit log_uint(bef);
-      assert(bef == 0);
-      transfer(address(2), address(1), 100);
-      uint aft = balanceOf(address(2));
-      assert(aft == 100);
-      emit log_uint(aft);
-      emit log_uint(balanceOf(address(1)));
-    }
+  function testFailTransferFrom() external {
+    uint amount = 1 ether;
+    token.transferFrom(ALICE, BOB, amount);
+  }
+  
+  function testBurn() external {
+    uint amount = 1 ether;
+    cheats.prank(ALICE);
+    token.burn(ALICE, amount);
+    assertEq(token.balanceOf(ALICE), initialBalance - amount);
   }
 }
