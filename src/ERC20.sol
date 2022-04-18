@@ -6,15 +6,15 @@ contract ERC20 {
     Offsets
   ----------------------------------------------------*/
 
-  function accountOffset(address account) internal view returns (uint offset) {
+  function getAccountOffset(address account) internal pure returns (uint offset) {
     assembly {
       // account offset is 4096 + account
       offset := add(0x1000, account)
     }
   }
 
-  function allowanceOffset(address account, address spender) internal view returns (uint offset) {
-    uint offset = accountOffset(account);
+  function getAllowanceOffset(address account, address spender) internal pure returns (uint offset) {
+    offset = getAccountOffset(account);
     assembly {
       // store offset in mem[0..32]
       mstore(0, offset)
@@ -30,7 +30,7 @@ contract ERC20 {
   ----------------------------------------------------*/
 
   function balanceOf(address account) public view returns (uint bal) {
-    uint offset = accountOffset(account);
+    uint offset = getAccountOffset(account);
     assembly {
       bal := sload(offset)
     }
@@ -44,7 +44,7 @@ contract ERC20 {
   }
 
   function allowance(address spender, address account) public view returns (uint amount) {
-    uint offset = allowanceOffset(account, spender);
+    uint offset = getAllowanceOffset(account, spender);
     assembly {
       amount := sload(offset)
     }
@@ -54,8 +54,8 @@ contract ERC20 {
     State updates 
   ----------------------------------------------------*/
 
-  function mint(address to, uint amount) public {
-    uint offset = accountOffset(to);
+  function mint(address to, uint amount) public virtual {
+    uint offset = getAccountOffset(to);
     assembly {
       sstore(offset, add(sload(offset), amount))
       sstore(0x01, add(sload(0x01), amount))
@@ -63,8 +63,8 @@ contract ERC20 {
   }
 
   function transfer(address from, address to, uint amount) public {
-    uint fromOffset = accountOffset(from);
-    uint toOffset = accountOffset(to);
+    uint fromOffset = getAccountOffset(from);
+    uint toOffset = getAccountOffset(to);
 
     assembly {
       if iszero(eq(from, caller())) {
@@ -82,9 +82,9 @@ contract ERC20 {
   }
 
   function transferFrom(address from, address to, uint amount) public {
-    uint fromOffset = accountOffset(from);
-    uint toOffset = accountOffset(to);
-    uint allowanceOffset = allowanceOffset(from, to);
+    uint fromOffset = getAccountOffset(from);
+    uint toOffset = getAccountOffset(to);
+    uint allowanceOffset = getAllowanceOffset(from, to);
     assembly {
       let fromBal := sload(fromOffset)
       if iszero(iszero(lt(fromBal, amount))) {
@@ -101,7 +101,7 @@ contract ERC20 {
   }
 
   function approve(address account, address spender, uint amount) public {
-    uint offset = allowanceOffset(account, spender);
+    uint offset = getAllowanceOffset(account, spender);
     assembly {
       // can only be called by account
       if iszero(eq(account, caller())) {
@@ -111,8 +111,8 @@ contract ERC20 {
     }
   }
   
-  function burn(address account, uint amount) public {
-    uint offset = accountOffset(account);
+  function burn(address account, uint amount) public virtual {
+    uint offset = getAccountOffset(account);
     assembly {
       if iszero(eq(account, caller())) {
         revert(0,0)
